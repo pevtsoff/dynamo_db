@@ -1,50 +1,24 @@
+import itertools
 import boto3
-from boto3.dynamodb.conditions import Key, Attr
+from boto3.dynamodb.conditions import Key
 
-# This helper will query all the items with 'partkey'
-# and having 'id_field' = ids
-table_name = 'your_table'
-partkey = 'your_part_key'
-id_field = 'id_'
-ids = ['id1', 'id2']
-
+# this helper allows to query all table items without limits
 dynamodb = boto3.resource("dynamodb")
-table = dynamodb.Table(table_name)
+table = dynamodb.Table("your_table_name")
+partkey = "yourpartkey"
 
 
-def query_all_items(key_condition_expression, filter_expression=None,
-                    projection_expression=None, table=table, index_name=None,
-                    expr_attr_names=None):
-    
-
-    kwargs = {'KeyConditionExpression': key_condition_expression}
-
-    if filter_expression:
-        kwargs.update({'FilterExpression': filter_expression})
-
-    if projection_expression:
-        kwargs.update({'ProjectionExpression': projection_expression})
-
-    if expr_attr_names:
-        kwargs.update({'ExpressionAttributeNames': expr_attr_names})
-
-    if index_name:
-        kwargs.update({'IndexName': index_name})
-
-    resp = table.query(**kwargs)
-    data = resp['Items']
-
-    while 'LastEvaluatedKey' in resp:
+def query_all_items(table, **kwargs):
+    while 'LastEvaluatedKey' in (resp := table.query(**kwargs)):
         kwargs.update({'ExclusiveStartKey': resp['LastEvaluatedKey']})
         resp = table.query(**kwargs)
-        data.extend(resp['Items'])
 
-    return data
+        yield resp['Items']
 
 
-items = query_all_items(
-    Key('partkey').eq(partkey),
+items = list(itertools.chain(*query_all_items(
+    KeyConditionExpression=Key('partkey').eq(partkey),
     table=table,
-    filter_expression=Attr(id_field).is_in(ids)
-)
+)))
+
 print(f'items={items}, items length = {items.__len__()}')
